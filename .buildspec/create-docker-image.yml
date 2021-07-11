@@ -1,0 +1,37 @@
+  
+---
+version: 0.2
+env:
+  variables:
+    env: ""
+    account_id: ""
+    service_name: ""
+phases:
+  pre_build:
+    commands:
+      - echo "install jq"
+      - curl -qL -o jq https://stedolan.github.io/jq/download/linux64/jq && chmod +x ./jq && mv ./jq /usr/local/bin/.
+  build:
+    commands:
+      - echo "configure AWS credentials"
+      - curl -qL -o aws_credentials.json http://169.254.170.2/$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI > aws_credentials.json
+      - aws configure set region $AWS_REGION
+      - aws configure set aws_access_key_id $(jq -r '.AccessKeyId' aws_credentials.json)
+      - aws configure set aws_secret_access_key $(jq -r '.SecretAccessKey' aws_credentials.json)
+      - aws configure set aws_session_token $(jq -r '.Token' aws_credentials.json)
+
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $account_id.dkr.ecr.$AWS_REGION.amazonaws.com
+      - image_tag=$(git rev-parse --short=9 HEAD)
+      - mkdir -p tmp/{pids,sockets}
+
+      - echo "Building the Docker image..."
+      - docker build -t $service_name:$image_tag .
+      - docker tag $service_name:$image_tag $account_id.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$service_name:$image_tag
+
+      - echo "Pushing the Docker image..."
+      - docker push $account_id.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$service_name:$image_tag
+      - aws ssm put-parameter --name "/$service_name/$env/image_tag" --value ${image_tag} --type "String" --overwrite
+  post_build:
+    commands:
+      - echo "Finish release the Docker image. image_tag... $image_tag"

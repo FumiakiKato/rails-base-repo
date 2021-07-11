@@ -1,0 +1,75 @@
+{
+    "variables": {
+        "aws_region": "{{env `AWS_REGION`}}",
+        "aws_ami_name": "enpay-app-release-{{isotime \"200601020304\"}}",
+        "aws_account_id": "{{env `account_id`}}",
+        "service_name": "{{env `service_name`}}",
+        "commit_id": ""
+    },
+
+    "builders": [{
+        "type": "amazon-ebs",
+        "region": "{{user `aws_region`}}",
+        "instance_type": "t3.medium",
+        "ssh_username": "ec2-user",
+        "ami_name": "{{user `aws_ami_name`}}",
+        "ami_description": "{{user `service_name`}} Application Release",
+        "associate_public_ip_address": "true",
+        "tags": {
+            "Name": "{{user `aws_ami_name`}}",
+            "CommitId": "{{user `commit_id`}}"
+        },
+        "source_ami_filter": {
+          "filters": {
+            "virtualization-type": "hvm",
+            "name": "*rails-base-ami-*",
+            "root-device-type": "ebs"
+          },
+          "owners": ["{{user `aws_account_id`}}"],
+          "most_recent": true
+        }
+    }],
+
+    "provisioners": [
+        {
+            "type": "shell",
+            "inline": "sudo /usr/bin/cloud-init status --wait"
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "mkdir /var/www/{{user `service_name`}}",
+                "chown ec2-user /var/www/{{user `service_name`}}"
+            ]
+        },
+        {
+            "type": "file",
+            "source": "./",
+            "destination": "/var/www/{{user `service_name`}}/"
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "# set ruby",
+                ". ~/.bash_profile",
+
+                "# prepare",
+                "cd /var/www/{{user `service_name`}}",
+                "mkdir -p tmp/{pids,sockets}",
+
+                "# rails",
+                "bundle config --local deployment true",
+                "bundle config --local without development:test",
+                "bundle install -j 4"
+            ]
+        }
+    ],
+
+    "post-processors": [
+        {
+          "type": "manifest",
+          "output": "manifest.json",
+          "strip_path": true
+        }
+    ]
+}

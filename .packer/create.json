@@ -1,7 +1,7 @@
 {
     "variables": {
         "aws_region": "{{env `AWS_REGION`}}",
-        "aws_ami_name": "enpay-app-release-{{isotime \"200601020304\"}}",
+        "aws_ami_name": "{{env `service_name`}}-app-release-{{isotime \"200601020304\"}}",
         "aws_account_id": "{{env `account_id`}}",
         "service_name": "{{env `service_name`}}",
         "commit_id": ""
